@@ -33,7 +33,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     return newId;
   }, []);
 
-  // Connect on mount
+  // Connect on mount (run only once)
   useEffect(() => {
     // Connect with a temporary user ID
     const id = userId();
@@ -59,7 +59,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       cleanupMessage();
       // Don't disconnect on unmount to allow for page navigation without losing connection
     };
-  }, [connect, userId, addMessageHandler, onOpen, onMessage]);
+  }, []); // Only run on mount
   
   // Handle connection status changes
   useEffect(() => {

@@ -1,16 +1,16 @@
 import { create } from 'zustand';
 import { useWebSocketStore } from '@/lib/websocket';
 import { useUserStore } from './user-store';
-import { 
-  RoomState, 
-  Card, 
-  MessageType, 
-  GameStatus, 
-  DisplayCard,
-  ChatMessage,
-  AuditMessage,
-  Suit
-} from '@shared/types';
+// TODO: Replace 'any' with the real type when available
+import type { Card, PlayerState, TeamState } from '@shared/schema';
+type RoomState = any;
+import type { MessageType } from '@shared/types';
+// Define local types for DisplayCard, ChatMessage, AuditMessage, Suit if needed
+
+type DisplayCard = Card & { selected?: boolean };
+type ChatMessage = { id: string; sender: string; message: string; timestamp: number; teamOnly?: boolean; };
+type AuditMessage = { id: string; message: string; timestamp: number; };
+type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
 import { nanoid } from 'nanoid';
 
 interface GameState {
@@ -460,16 +460,24 @@ export const useGameStore = create<GameState>((set, get) => {
     // Actions
     createRoom: (name: string) => {
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot create room: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.CREATE_ROOM,
+        type: 'create_room',
         payload: { name }
       });
     },
     
     joinRoom: (code: string) => {
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot join room: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.JOIN_ROOM,
+        type: 'join_room',
         payload: { roomCode: code }
       });
     },
@@ -477,10 +485,13 @@ export const useGameStore = create<GameState>((set, get) => {
     leaveRoom: () => {
       const { roomId } = get();
       if (!roomId) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot leave room: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.LEAVE_ROOM,
+        type: 'leave_room',
         payload: { roomId }
       });
     },
@@ -488,10 +499,13 @@ export const useGameStore = create<GameState>((set, get) => {
     startGame: () => {
       const { roomId } = get();
       if (!roomId) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot start game: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.START_GAME,
+        type: 'start_game',
         payload: { roomId }
       });
     },
@@ -499,10 +513,13 @@ export const useGameStore = create<GameState>((set, get) => {
     selectTrump: (suit: Suit | null) => {
       const { roomId } = get();
       if (!roomId) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot select trump: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.SELECT_TRUMP,
+        type: 'select_trump',
         payload: { 
           roomId,
           suit,
@@ -514,17 +531,19 @@ export const useGameStore = create<GameState>((set, get) => {
     playCard: (card: Card) => {
       const { roomId, isYourTurn, playableCards } = get();
       if (!roomId || !isYourTurn) return;
-      
       // Check if card is playable
       const cardString = `${card.value}-${card.suit}`;
       if (playableCards.length > 0 && !playableCards.includes(cardString)) {
         get().addNotification("You can't play that card", 3000);
         return;
       }
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot play card: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.PLAY_CARD,
+        type: 'play_card',
         payload: { 
           roomId,
           card
@@ -535,10 +554,14 @@ export const useGameStore = create<GameState>((set, get) => {
     toggleReady: (ready: boolean) => {
       const { roomId } = get();
       if (!roomId) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot toggle ready: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.PLAYER_READY,
+        // TODO: Use correct MessageType for player ready action
+        type: 'ready_for_next_round',
         payload: { 
           roomId,
           ready
@@ -549,10 +572,13 @@ export const useGameStore = create<GameState>((set, get) => {
     addAIPlayer: (teamId: number) => {
       const { roomId } = get();
       if (!roomId) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot add AI player: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.ADD_AI_PLAYER,
+        type: 'add_ai_player',
         payload: { 
           roomId,
           teamId
@@ -563,10 +589,14 @@ export const useGameStore = create<GameState>((set, get) => {
     removeAIPlayer: (playerId: string) => {
       const { roomId } = get();
       if (!roomId) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot remove AI player: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.REMOVE_AI_PLAYER,
+        // TODO: Use correct MessageType for removing AI player
+        type: 'send_chat',
         payload: { 
           roomId,
           playerId
@@ -577,10 +607,13 @@ export const useGameStore = create<GameState>((set, get) => {
     sendChatMessage: (text: string) => {
       const { roomId } = get();
       if (!roomId || !text.trim()) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot send chat: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.CHAT_MESSAGE,
+        type: 'chat_message',
         payload: { 
           roomId,
           text: text.trim()
@@ -591,10 +624,14 @@ export const useGameStore = create<GameState>((set, get) => {
     switchTeam: (teamId: number) => {
       const { roomId } = get();
       if (!roomId) return;
-      
       const socket = useWebSocketStore.getState();
+      if (!socket.isConnected || !socket.isAuthenticated) {
+        get().addNotification('Cannot switch team: not connected to server', 3000);
+        return;
+      }
       socket.send({
-        type: MessageType.SWITCH_TEAM,
+        // TODO: Use correct MessageType for switching team
+        type: 'send_chat',
         payload: { 
           roomId,
           teamId

@@ -200,22 +200,79 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // Skip implementation for now - we'll use MemStorage
-  async getUser(id: number): Promise<User | undefined> { return undefined; }
-  async getUserByUsername(username: string): Promise<User | undefined> { return undefined; }
-  async createUser(insertUser: InsertUser): Promise<User> { throw new Error('Database connection failed'); }
-  async getRoom(id: string): Promise<Room | undefined> { return undefined; }
-  async createRoom(room: InsertRoom): Promise<Room> { throw new Error('Database connection failed'); }
-  async updateRoom(id: string, updates: Partial<Room>): Promise<Room | undefined> { return undefined; }
-  async getPlayer(id: number): Promise<Player | undefined> { return undefined; }
-  async getPlayersByRoomId(roomId: string): Promise<Player[]> { return []; }
-  async createPlayer(player: InsertPlayer): Promise<Player> { throw new Error('Database connection failed'); }
-  async updatePlayer(id: number, updates: Partial<Player>): Promise<Player | undefined> { return undefined; }
-  async getGameState(roomId: string): Promise<GameState | undefined> { return undefined; }
-  async saveGameState(gameState: GameState): Promise<GameState> { throw new Error('Database connection failed'); }
-  async updateGameState(roomId: string, updates: Partial<GameState>): Promise<GameState | undefined> { return undefined; }
-  async deleteGameState(roomId: string): Promise<boolean> { return true; }
+  // User operations
+  async getUser(id: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
+  }
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.username, username));
+    return result[0];
+  }
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
+  }
+
+  // Room operations
+  async getRoom(id: string): Promise<Room | undefined> {
+    const result = await db.select().from(rooms).where(eq(rooms.id, id));
+    return result[0];
+  }
+  async createRoom(room: InsertRoom): Promise<Room> {
+    const result = await db.insert(rooms).values(room).returning();
+    return result[0];
+  }
+  async updateRoom(id: string, updates: Partial<Room>): Promise<Room | undefined> {
+    const result = await db.update(rooms).set(updates).where(eq(rooms.id, id)).returning();
+    return result[0];
+  }
+
+  // Player operations
+  async getPlayer(id: number): Promise<Player | undefined> {
+    const result = await db.select().from(players).where(eq(players.id, id));
+    return result[0];
+  }
+  async getPlayersByRoomId(roomId: string): Promise<Player[]> {
+    const result = await db.select().from(players).where(eq(players.roomId, roomId));
+    return result;
+  }
+  async createPlayer(player: InsertPlayer): Promise<Player> {
+    const result = await db.insert(players).values(player).returning();
+    return result[0];
+  }
+  async updatePlayer(id: number, updates: Partial<Player>): Promise<Player | undefined> {
+    const result = await db.update(players).set(updates).where(eq(players.id, id)).returning();
+    return result[0];
+  }
+
+  // Game state operations
+  async getGameState(roomId: string): Promise<GameState | undefined> {
+    const result = await db.select().from(gameStates).where(eq(gameStates.roomId, roomId));
+    return result[0]?.state;
+  }
+  async saveGameState(gameState: GameState): Promise<GameState> {
+    // Upsert: try insert, if conflict update
+    await db.insert(gameStates).values({ roomId: gameState.roomId, state: gameState, updatedAt: new Date().toISOString() })
+      .onConflictDoUpdate({ target: gameStates.roomId, set: { state: gameState, updatedAt: new Date().toISOString() } });
+    return gameState;
+  }
+  async updateGameState(roomId: string, updates: Partial<GameState>): Promise<GameState | undefined> {
+    // Only supports updating the state blob
+    if (updates) {
+      const prev = await this.getGameState(roomId);
+      const merged = { ...prev, ...updates };
+      await db.update(gameStates).set({ state: merged, updatedAt: new Date().toISOString() }).where(eq(gameStates.roomId, roomId));
+      return merged;
+    }
+    return undefined;
+  }
+  async deleteGameState(roomId: string): Promise<boolean> {
+    await db.delete(gameStates).where(eq(gameStates.roomId, roomId));
+    return true;
+  }
 }
 
+
 // Use MemStorage instead of DatabaseStorage
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
